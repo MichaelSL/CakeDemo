@@ -1,7 +1,10 @@
 #tool "nuget:?package=xunit.runner.console"
+#addin Cake.XdtTransform
 
 var target = Argument("target", "Default");
+var configuration = Argument("configuration", "Debug");
 var slnFile = Argument("slnFile", "../CakeDemo.sln");
+var customInfo = Argument<string>("customInfo", null);
 
 var xUnitReportsPath = "./xUnitReports";
 var nugetPackagerOutputDir = "./nuget";
@@ -9,6 +12,9 @@ var nugetPackagerOutputDir = "./nuget";
 Task("Init")
     .Does(() =>
 {
+    if (!String.IsNullOrEmpty(customInfo)){
+        Information(customInfo);
+    }
     CleanDirectories(new string[] {xUnitReportsPath, nugetPackagerOutputDir});
 });
 
@@ -19,8 +25,18 @@ Task("NugetRestore")
     NuGetRestore(slnFile);
 });
 
+Task("TransformXml")
+    .Does(()=>
+    {
+        var sourceFile      = File("../CakeDemo.ConsoleHost/App.Default.config");
+        var transformFile   = File("../CakeDemo.ConsoleHost/App." + configuration + ".config");
+        var targetFile      = File("../CakeDemo.ConsoleHost/App.config");
+        XdtTransformConfig(sourceFile, transformFile, targetFile);
+    });
+
 Task("Build")
     .IsDependentOn("NugetRestore")
+    .IsDependentOn("TransformXml")
     .Does(() =>
 {
     MSBuild(slnFile);
@@ -64,6 +80,15 @@ Task("Nuget")
 });
 
 Task("Default")
-    .IsDependentOn("Test");
+    .IsDependentOn("Test")
+    .Does(()=>
+    {
+        
+    })
+    .OnError(exception =>
+    {
+        Error(exception.Message);
+        Information(@"Usage sample: .\build.ps1 -target ""Default"" -configuration ""Release"" -scriptArgs ""-customInfo='My text'""");
+    });
 
 RunTarget(target);
